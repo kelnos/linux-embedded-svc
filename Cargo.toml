@@ -1,0 +1,12 @@
+[package]
+name = "linux-embedded-svc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+embedded-svc = "0.21"
+rumqttc = "0.12"
+tokio = "1"
+
+[patch.crates-io]
+rumqttc = { git = "https://github.com/kelnos/rumqtt.git", branch = "public-connection-iter" }
