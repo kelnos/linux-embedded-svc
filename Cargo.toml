@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 embedded-svc = "0.21"
 rumqttc = "0.12"
+rusqlite = "0.27"
 tokio = "1"
 
 [patch.crates-io]
