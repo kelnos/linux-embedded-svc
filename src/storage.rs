@@ -35,10 +35,10 @@ impl SqliteStorage {
             "CREATE TABLE IF NOT EXISTS embedded_svc_storage (
                 key TEXT NOT NULL PRIMARY KEY,
                 value BLOB
-            )", [])?;
-        Ok(SqliteStorage {
-            db,
-        })
+            )",
+            [],
+        )?;
+        Ok(SqliteStorage { db })
     }
 }
 
@@ -48,7 +48,11 @@ impl Errors for SqliteStorage {
 
 impl Storage for SqliteStorage {
     fn contains(&self, key: impl AsRef<str>) -> Result<bool, Self::Error> {
-        match self.db.query_row("SELECT key FROM embedded_svc_storage WHERE key = ?", [key.as_ref()], |_| Ok(())) {
+        match self.db.query_row(
+            "SELECT key FROM embedded_svc_storage WHERE key = ?",
+            [key.as_ref()],
+            |_| Ok(()),
+        ) {
             Ok(_) => Ok(true),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
             Err(err) => Err(err.into()),
@@ -56,7 +60,11 @@ impl Storage for SqliteStorage {
     }
 
     fn len(&self, key: impl AsRef<str>) -> Result<Option<usize>, Self::Error> {
-        match self.db.query_row("SELECT key,value FROM embedded_svc_storage WHERE key = ?", [key.as_ref()], |row| row.get::<&str, Vec<u8>>("value")) {
+        match self.db.query_row(
+            "SELECT key,value FROM embedded_svc_storage WHERE key = ?",
+            [key.as_ref()],
+            |row| row.get::<&str, Vec<u8>>("value"),
+        ) {
             Ok(value) => Ok(Some(value.len())),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(err) => Err(err.into()),
@@ -64,7 +72,11 @@ impl Storage for SqliteStorage {
     }
 
     fn get_raw(&self, key: impl AsRef<str>) -> Result<Option<alloc::vec::Vec<u8>>, Self::Error> {
-        match self.db.query_row("SELECT key,value FROM embedded_svc_storage WHERE key = ?", [key.as_ref()], |row| row.get::<&str, alloc::vec::Vec<u8>>("value")) {
+        match self.db.query_row(
+            "SELECT key,value FROM embedded_svc_storage WHERE key = ?",
+            [key.as_ref()],
+            |row| row.get::<&str, alloc::vec::Vec<u8>>("value"),
+        ) {
             Ok(value) => Ok(Some(value)),
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(err) => Err(err.into()),
@@ -84,7 +96,10 @@ impl Storage for SqliteStorage {
     }
 
     fn remove(&mut self, key: impl AsRef<str>) -> Result<bool, Self::Error> {
-        let res = self.db.execute("DELETE FROM embedded_svc_storage WHERE key = ?", [key.as_ref()])?;
+        let res = self.db.execute(
+            "DELETE FROM embedded_svc_storage WHERE key = ?",
+            [key.as_ref()],
+        )?;
         Ok(res == 1)
     }
 }

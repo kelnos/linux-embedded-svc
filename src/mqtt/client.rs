@@ -1,6 +1,10 @@
-use embedded_svc::{mqtt::client::*, errors::Errors};
+use embedded_svc::{errors::Errors, mqtt::client::*};
 use rumqttc::{Client as RumqttcClient, ClientError as RumqttcError};
-use std::{fmt, thread::{self, JoinHandle}, sync::{Arc, Mutex, mpsc}};
+use std::{
+    fmt,
+    sync::{mpsc, Arc, Mutex},
+    thread::{self, JoinHandle},
+};
 
 #[derive(Debug)]
 pub enum MqttError {
@@ -55,7 +59,9 @@ impl<'a> Connection for MqttConnectionIter<'a> {
     type Message = ();
     fn next(&mut self) -> Option<Result<Event<Self::Message>, Self::Error>> {
         match self.0.next() {
-            Some(Ok(rumqttc::Event::Incoming(incoming))) => packet_to_event(incoming).map(|ev| Ok(ev)),
+            Some(Ok(rumqttc::Event::Incoming(incoming))) => {
+                packet_to_event(incoming).map(|ev| Ok(ev))
+            }
             Some(Ok(rumqttc::Event::Outgoing(_))) => None,
             Some(Err(err)) => Some(Err(err.into())),
             None => None,
@@ -84,7 +90,11 @@ pub struct MqttClient {
 }
 
 impl MqttClient {
-    pub fn new<'a>(options: rumqttc::MqttOptions, cap: usize, publish_queue_size: usize) -> (Self, MqttConnection) {
+    pub fn new<'a>(
+        options: rumqttc::MqttOptions,
+        cap: usize,
+        publish_queue_size: usize,
+    ) -> (Self, MqttConnection) {
         let (client, conn) = RumqttcClient::new(options, cap);
         let inner = Arc::new(Mutex::new(client));
         let (tx, rx) = mpsc::sync_channel(publish_queue_size);
@@ -98,7 +108,7 @@ impl MqttClient {
             queue: Some((queue_thread, tx)),
         };
         let mqtt_conn = MqttConnection(conn);
-        
+
         (mqtt_client, mqtt_conn)
     }
 }
@@ -118,19 +128,25 @@ impl Errors for MqttClient {
 
 impl Client for MqttClient {
     fn subscribe<'a, S>(&'a mut self, topic: S, qos: QoS) -> Result<MessageId, Self::Error>
-        where
-            S: Into<std::borrow::Cow<'a, str>>
+    where
+        S: Into<std::borrow::Cow<'a, str>>,
     {
-        self.inner.lock().unwrap().subscribe(topic.into(), qos_to_qos(qos))
+        self.inner
+            .lock()
+            .unwrap()
+            .subscribe(topic.into(), qos_to_qos(qos))
             .map(|_| 0)
             .map_err(|err| err.into())
     }
 
     fn unsubscribe<'a, S>(&'a mut self, topic: S) -> Result<MessageId, Self::Error>
-        where
-            S: Into<std::borrow::Cow<'a, str>>
+    where
+        S: Into<std::borrow::Cow<'a, str>>,
     {
-        self.inner.lock().unwrap().unsubscribe(topic.into())
+        self.inner
+            .lock()
+            .unwrap()
+            .unsubscribe(topic.into())
             .map(|_| 0)
             .map_err(|err| err.into())
     }
@@ -138,15 +154,15 @@ impl Client for MqttClient {
 
 impl Enqueue for MqttClient {
     fn enqueue<'a, S, V>(
-            &'a mut self,
-            topic: S,
-            qos: QoS,
-            retain: bool,
-            payload: V,
-        ) -> Result<MessageId, Self::Error>
-        where
-            S: Into<std::borrow::Cow<'a, str>>,
-            V: Into<std::borrow::Cow<'a, [u8]>>
+        &'a mut self,
+        topic: S,
+        qos: QoS,
+        retain: bool,
+        payload: V,
+    ) -> Result<MessageId, Self::Error>
+    where
+        S: Into<std::borrow::Cow<'a, str>>,
+        V: Into<std::borrow::Cow<'a, [u8]>>,
     {
         if let Some((_, tx)) = &self.queue {
             let _ = tx.send(QueuedMessage {
@@ -162,17 +178,20 @@ impl Enqueue for MqttClient {
 
 impl Publish for MqttClient {
     fn publish<'a, S, V>(
-            &'a mut self,
-            topic: S,
-            qos: QoS,
-            retain: bool,
-            payload: V,
-        ) -> Result<MessageId, Self::Error>
-        where
-            S: Into<std::borrow::Cow<'a, str>>,
-            V: Into<std::borrow::Cow<'a, [u8]>>
+        &'a mut self,
+        topic: S,
+        qos: QoS,
+        retain: bool,
+        payload: V,
+    ) -> Result<MessageId, Self::Error>
+    where
+        S: Into<std::borrow::Cow<'a, str>>,
+        V: Into<std::borrow::Cow<'a, [u8]>>,
     {
-        self.inner.lock().unwrap().publish(topic.into(), qos_to_qos(qos), retain, payload.into())
+        self.inner
+            .lock()
+            .unwrap()
+            .publish(topic.into(), qos_to_qos(qos), retain, payload.into())
             .map(|_| 0)
             .map_err(|err| err.into())
     }
@@ -180,7 +199,12 @@ impl Publish for MqttClient {
 
 fn queue_thread(client: Arc<Mutex<RumqttcClient>>, rx: mpsc::Receiver<QueuedMessage>) {
     while let Ok(message) = rx.recv() {
-        let _ = client.lock().unwrap().publish(message.topic, message.qos, message.retain, message.payload);
+        let _ = client.lock().unwrap().publish(
+            message.topic,
+            message.qos,
+            message.retain,
+            message.payload,
+        );
     }
 }
 

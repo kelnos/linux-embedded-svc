@@ -5,6 +5,8 @@ pub struct LinuxSystemTime;
 
 impl SystemTime for LinuxSystemTime {
     fn now(&self) -> Duration {
-        StdSystemTime::now().duration_since(StdSystemTime::UNIX_EPOCH).unwrap()
+        StdSystemTime::now()
+            .duration_since(StdSystemTime::UNIX_EPOCH)
+            .unwrap()
     }
 }
