@@ -49,7 +49,13 @@ struct QueuedMessage {
     payload: Vec<u8>,
 }
 
-pub struct MqttConnectionIter<'a>(pub(crate) rumqttc::ConnectionIter<'a>);
+pub struct MqttConnectionIter<'a>(pub(crate) rumqttc::Iter<'a>);
+
+impl<'a> From<MqttConnectionIter<'a>> for rumqttc::Iter<'a> {
+    fn from(iter: MqttConnectionIter<'a>) -> Self {
+        iter.0
+    }
+}
 
 impl<'a> Errors for MqttConnectionIter<'a> {
     type Error = MqttError;
@@ -59,9 +65,7 @@ impl<'a> Connection for MqttConnectionIter<'a> {
     type Message = ();
     fn next(&mut self) -> Option<Result<Event<Self::Message>, Self::Error>> {
         match self.0.next() {
-            Some(Ok(rumqttc::Event::Incoming(incoming))) => {
-                packet_to_event(incoming).map(|ev| Ok(ev))
-            }
+            Some(Ok(rumqttc::Event::Incoming(incoming))) => packet_to_event(incoming).map(Ok),
             Some(Ok(rumqttc::Event::Outgoing(_))) => None,
             Some(Err(err)) => Some(Err(err.into())),
             None => None,
@@ -84,13 +88,19 @@ impl<'a> MqttConnection {
     }
 }
 
+impl From<MqttConnection> for rumqttc::Connection {
+    fn from(conn: MqttConnection) -> Self {
+        conn.0
+    }
+}
+
 pub struct MqttClient {
     inner: Arc<Mutex<RumqttcClient>>,
     queue: Option<(JoinHandle<()>, mpsc::SyncSender<QueuedMessage>)>,
 }
 
 impl MqttClient {
-    pub fn new<'a>(
+    pub fn new(
         options: rumqttc::MqttOptions,
         cap: usize,
         publish_queue_size: usize,
@@ -110,6 +120,29 @@ impl MqttClient {
         let mqtt_conn = MqttConnection(conn);
 
         (mqtt_client, mqtt_conn)
+    }
+}
+
+impl TryInto<RumqttcClient> for MqttClient {
+    type Error = Self;
+    fn try_into(mut self) -> Result<RumqttcClient, Self::Error> {
+        let queue = self.queue.take();
+        let inner = Arc::clone(&self.inner);
+        drop(self);
+
+        match Arc::try_unwrap(inner) {
+            Ok(mutex_inner) => {
+                if let Some((queue_thread, tx)) = queue {
+                    drop(tx);
+                    let _ = queue_thread.join();
+                }
+                Ok(mutex_inner.into_inner().unwrap())
+            }
+            Err(arc_inner) => Err(Self {
+                inner: arc_inner,
+                queue,
+            }),
+        }
     }
 }
 
