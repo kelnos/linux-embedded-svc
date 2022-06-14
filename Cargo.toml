@@ -3,10 +3,15 @@ name = "linux-embedded-svc"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["mqtt", "storage"]
+mqtt = ["rumqttc"]
+storage = ["rusqlite"]
+
 [dependencies]
 embedded-svc = "0.21"
-rumqttc = "0.12"
-rusqlite = "0.27"
+rumqttc = { version = "0.12", optional = true }
+rusqlite = { version = "0.27", optional = true }
 tokio = "1"
 
 [patch.crates-io]
