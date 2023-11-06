@@ -3,6 +3,9 @@ name = "linux-embedded-svc"
 version = "0.1.0"
 edition = "2021"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = ["mqtt", "storage"]
 mqtt = ["rumqttc"]
