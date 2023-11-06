@@ -1,4 +1,4 @@
-use embedded_svc::{errors::Errors, mqtt::client::*};
+use embedded_svc::mqtt::client::*;
 use rumqttc::{Client as RumqttcClient, ClientError as RumqttcError};
 use std::{
     fmt,
@@ -57,13 +57,16 @@ impl<'a> From<MqttConnectionIter<'a>> for rumqttc::Iter<'a> {
     }
 }
 
-impl<'a> Errors for MqttConnectionIter<'a> {
+impl<'a> ErrorType for MqttConnectionIter<'a> {
     type Error = MqttError;
 }
 
-impl<'a> Connection for MqttConnectionIter<'a> {
-    type Message = ();
-    fn next(&mut self) -> Option<Result<Event<Self::Message>, Self::Error>> {
+impl<'iter> Connection for MqttConnectionIter<'iter> {
+    type Message<'a> = ()
+        where
+            Self: 'a;
+
+    fn next(&mut self) -> Option<Result<Event<Self::Message<'iter>>, Self::Error>> {
         match self.0.next() {
             Some(Ok(rumqttc::Event::Incoming(incoming))) => packet_to_event(incoming).map(Ok),
             Some(Ok(rumqttc::Event::Outgoing(_))) => None,
@@ -155,54 +158,44 @@ impl Drop for MqttClient {
     }
 }
 
-impl Errors for MqttClient {
+impl ErrorType for MqttClient {
     type Error = MqttError;
 }
 
 impl Client for MqttClient {
-    fn subscribe<'a, S>(&'a mut self, topic: S, qos: QoS) -> Result<MessageId, Self::Error>
-    where
-        S: Into<std::borrow::Cow<'a, str>>,
-    {
+    fn subscribe<'a>(&'a mut self, topic: &'a str, qos: QoS) -> Result<MessageId, Self::Error> {
         self.inner
             .lock()
             .unwrap()
-            .subscribe(topic.into(), qos_to_qos(qos))
+            .subscribe(topic, qos_to_qos(qos))
             .map(|_| 0)
             .map_err(|err| err.into())
     }
 
-    fn unsubscribe<'a, S>(&'a mut self, topic: S) -> Result<MessageId, Self::Error>
-    where
-        S: Into<std::borrow::Cow<'a, str>>,
-    {
+    fn unsubscribe<'a>(&'a mut self, topic: &'a str) -> Result<MessageId, Self::Error> {
         self.inner
             .lock()
             .unwrap()
-            .unsubscribe(topic.into())
+            .unsubscribe(topic)
             .map(|_| 0)
             .map_err(|err| err.into())
     }
 }
 
 impl Enqueue for MqttClient {
-    fn enqueue<'a, S, V>(
+    fn enqueue<'a>(
         &'a mut self,
-        topic: S,
+        topic: &'a str,
         qos: QoS,
         retain: bool,
-        payload: V,
-    ) -> Result<MessageId, Self::Error>
-    where
-        S: Into<std::borrow::Cow<'a, str>>,
-        V: Into<std::borrow::Cow<'a, [u8]>>,
-    {
+        payload: &'a [u8],
+    ) -> Result<MessageId, Self::Error> {
         if let Some((_, tx)) = &self.queue {
             let _ = tx.send(QueuedMessage {
-                topic: topic.into().into_owned(),
+                topic: topic.to_string(),
                 qos: qos_to_qos(qos),
                 retain,
-                payload: payload.into().into(),
+                payload: Vec::from(payload),
             });
         }
         Ok(0)
@@ -210,21 +203,17 @@ impl Enqueue for MqttClient {
 }
 
 impl Publish for MqttClient {
-    fn publish<'a, S, V>(
+    fn publish<'a>(
         &'a mut self,
-        topic: S,
+        topic: &'a str,
         qos: QoS,
         retain: bool,
-        payload: V,
-    ) -> Result<MessageId, Self::Error>
-    where
-        S: Into<std::borrow::Cow<'a, str>>,
-        V: Into<std::borrow::Cow<'a, [u8]>>,
-    {
+        payload: &'a [u8],
+    ) -> Result<MessageId, Self::Error> {
         self.inner
             .lock()
             .unwrap()
-            .publish(topic.into(), qos_to_qos(qos), retain, payload.into())
+            .publish(topic, qos_to_qos(qos), retain, payload)
             .map(|_| 0)
             .map_err(|err| err.into())
     }
